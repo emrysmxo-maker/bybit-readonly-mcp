@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: bybit-readonly-mcp
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /mcp
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: BYBIT_BASE_URL
+        value: https://api.bybit.com
