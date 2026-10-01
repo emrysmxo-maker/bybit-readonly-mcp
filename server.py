@@ -156,6 +156,54 @@ async def get_open_interest(
 
 
 @mcp.tool()
+async def get_top_movers(
+    category: Category = "linear",
+    top_n: int = 20,
+    min_turnover_usdt: float = 0.0,
+) -> dict[str, Any]:
+    """Get Bybit's own top gainers and top losers by 24h % change for an entire
+    category (linear, spot, inverse, option). Unlike third-party sources such as
+    CoinGecko, this covers every symbol actually listed on Bybit, including
+    small/new tickers CoinGecko may not track. Read-only, no API key required.
+    Pass min_turnover_usdt to filter out illiquid symbols before ranking.
+    """
+    top_n = _bounded_limit(top_n, 1, 100)
+    data = await _bybit_get("/v5/market/tickers", {"category": category})
+    tickers = data.get("result", {}).get("list", [])
+
+    rows = []
+    for t in tickers:
+        try:
+            pct = float(t.get("price24hPcnt", "0")) * 100
+            turnover = float(t.get("turnover24h", "0"))
+        except (TypeError, ValueError):
+            continue
+        if turnover < min_turnover_usdt:
+            continue
+        rows.append(
+            {
+                "symbol": t.get("symbol"),
+                "lastPrice": t.get("lastPrice"),
+                "price24hPcnt": round(pct, 3),
+                "turnover24h": t.get("turnover24h"),
+                "volume24h": t.get("volume24h"),
+                "highPrice24h": t.get("highPrice24h"),
+                "lowPrice24h": t.get("lowPrice24h"),
+            }
+        )
+
+    gainers = sorted(rows, key=lambda r: r["price24hPcnt"], reverse=True)[:top_n]
+    losers = sorted(rows, key=lambda r: r["price24hPcnt"])[:top_n]
+
+    return {
+        "category": category,
+        "total_symbols_scanned": len(rows),
+        "top_gainers": gainers,
+        "top_losers": losers,
+    }
+
+
+@mcp.tool()
 async def server_status() -> dict[str, Any]:
     """Check that this MCP server and Bybit public API are reachable."""
     data = await _bybit_get("/v5/market/time", {})
